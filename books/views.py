@@ -1,8 +1,8 @@
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
 from rest_framework.viewsets import ModelViewSet
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework import status
@@ -10,16 +10,37 @@ from rest_framework import status
 from books.models import Book
 from books.serializers import BookListSerializer
 
-class BookPagination(PageNumberPagination):
-    page_size = 20
-    page_size_query_param = 'page_size'
-    max_page_size = 100
+def paginate(queryset, request):
+    page_size = request.query_params.get('page_size', 20)
+    try:
+        page_size = min(int(page_size), 100)
+    except (ValueError, TypeError):
+        page_size = 20
+
+    paginator = Paginator(queryset, page_size)
+    page_number = request.query_params.get('page', 1)
+
+    try:
+        page_obj = paginator.page(page_number)
+    except PageNotAnInteger:
+        page_obj = paginator.page(1)
+    except EmptyPage:
+        page_obj = paginator.page(paginator.num_pages)
+
+    return {
+        'count': paginator.count,
+        'total_pages': paginator.num_pages,
+        'page': page_obj.number,
+        'page_size': page_size,
+        'next': page_obj.next_page_number() if page_obj.has_next() else None,
+        'previous': page_obj.previous_page_number() if page_obj.has_previous() else None,
+        'results': list(page_obj.object_list),
+    }
 
 
 class BookViewSet(ModelViewSet):
     serializer_class = BookListSerializer
     permission_classes = []
-    pagination_class = BookPagination
 
     def get_queryset(self):
         queryset = Book.objects.all()
@@ -59,10 +80,17 @@ class BookViewSet(ModelViewSet):
 
     def list(self, request: Request, *args, **kwargs):
         queryset = self.get_queryset()
-        paginator = self.pagination_class()
-        page = paginator.paginate_queryset(queryset, request)
-        serializer = self.serializer_class(page, many=True)
-        return paginator.get_paginated_response(serializer.data)
+        paged = paginate(queryset, request)
+        serializer = self.serializer_class(paged['results'], many=True)
+        return Response({
+            'count': paged['count'],
+            'total_pages': paged['total_pages'],
+            'page': paged['page'],
+            'page_size': paged['page_size'],
+            'next': paged['next'],
+            'previous': paged['previous'],
+            'results': serializer.data,
+        }, status=status.HTTP_200_OK)
 
     def create(self, request: Request, *args, **kwargs):
         serializer = self.serializer_class(data=request.data)
