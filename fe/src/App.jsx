@@ -1,122 +1,121 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import React, { useState, useEffect, useCallback } from 'react';
+import { getBooks } from './api/bookApi';
+import BookTable from './components/BookTable';
+import Pagination from './components/Pagination';
+import FilterBar from './components/FilterBar';
+import BookModal from './components/BookModal';
+import './App.css';
 
-function App() {
-  const [count, setCount] = useState(0)
+const EMPTY_FORM = { title: '', author: '', published_date: '', price: '', quantity: '' };
+
+export default function App() {
+  const [books, setBooks]           = useState([]);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState(null);
+
+  // Pagination
+  const [page, setPage]             = useState(1);
+  const [pageSize, setPageSize]     = useState(20);
+  const [totalPages, setTotalPages] = useState(1);
+  const [count, setCount]           = useState(0);
+
+  // Filters (applied)
+  const [appliedFilters, setAppliedFilters] = useState({ title: '', author: '' });
+  // Filters (draft while typing)
+  const [draftFilters, setDraftFilters]     = useState({ title: '', author: '' });
+
+  // Modal state
+  const [modal, setModal] = useState(null);
+  // { type: 'add'|'edit'|'detail'|'confirm', book: {...} }
+
+  const fetchBooks = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getBooks({ page, page_size: pageSize, ...appliedFilters });
+      setBooks(data.results);
+      setTotalPages(data.total_pages);
+      setCount(data.count);
+    } catch (e) {
+      setError('Failed to load books. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [page, pageSize, appliedFilters]);
+
+  useEffect(() => { fetchBooks(); }, [fetchBooks]);
+
+  const handleSearch = () => {
+    setPage(1);
+    setAppliedFilters({ ...draftFilters });
+  };
+
+  const handleClear = () => {
+    setDraftFilters({ title: '', author: '' });
+    setAppliedFilters({ title: '', author: '' });
+    setPage(1);
+  };
+
+  const handlePageSizeChange = (size) => {
+    setPageSize(size);
+    setPage(1);
+  };
+
+  const openAdd    = ()      => setModal({ type: 'add', book: null });
+  const openEdit   = (book)  => setModal({ type: 'edit', book });
+  const openDetail = (id)    => setModal({ type: 'detail', book: { id } });
+  const openDelete = (book)  => setModal({ type: 'confirm', book });
+  const closeModal = ()      => setModal(null);
+
+  const handleSaved = () => { closeModal(); fetchBooks(); };
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="app">
+      <header className="app-header">
+        <h1>📚 Book Management</h1>
+      </header>
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+      <main className="app-main">
+        <div className="toolbar">
+          <FilterBar
+            filters={draftFilters}
+            onChange={setDraftFilters}
+            onSearch={handleSearch}
+            onClear={handleClear}
+          />
+          <button className="btn btn-primary" onClick={openAdd}>+ Add Book</button>
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+        {error && <p className="error-msg">{error}</p>}
+        {loading ? (
+          <p className="loading-msg">Loading...</p>
+        ) : (
+          <BookTable
+            books={books}
+            onDetail={openDetail}
+            onEdit={openEdit}
+            onDelete={openDelete}
+          />
+        )}
+
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          count={count}
+          onPageChange={setPage}
+          onPageSizeChange={handlePageSizeChange}
+        />
+      </main>
+
+      {modal && (
+        <BookModal
+          type={modal.type}
+          book={modal.book}
+          onClose={closeModal}
+          onSaved={handleSaved}
+        />
+      )}
+    </div>
+  );
 }
-
-export default App
