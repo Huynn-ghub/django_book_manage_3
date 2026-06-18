@@ -1,46 +1,66 @@
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-
 from rest_framework.viewsets import ModelViewSet
+from rest_framework.views import APIView
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.pagination import PageNumberPagination
+
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 
 from books.models import Book
 from books.serializers import BookListSerializer
 
-def paginate(queryset, request):
-    page_size = request.query_params.get('page_size', 20)
-    try:
-        page_size = min(int(page_size), 100)
-    except (ValueError, TypeError):
-        page_size = 20
 
-    paginator = Paginator(queryset, page_size)
-    page_number = request.query_params.get('page', 1)
+# ─── Custom Pagination ────────────────────────────────────────────────────────
 
-    try:
-        page_obj = paginator.page(page_number)
-    except PageNotAnInteger:
-        page_obj = paginator.page(1)
-    except EmptyPage:
-        page_obj = paginator.page(paginator.num_pages)
+class BookPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
-    return {
-        'count': paginator.count,
-        'total_pages': paginator.num_pages,
-        'page': page_obj.number,
-        'page_size': page_size,
-        'next': page_obj.next_page_number() if page_obj.has_next() else None,
-        'previous': page_obj.previous_page_number() if page_obj.has_previous() else None,
-        'results': list(page_obj.object_list),
-    }
+    def get_paginated_response(self, data):
+        return Response({
+            'count':       self.page.paginator.count,
+            'total_pages': self.page.paginator.num_pages,
+            'page':        self.page.number,
+            'page_size':   self.get_page_size(self.request),
+            'next':        self.page.next_page_number() if self.page.has_next() else None,
+            'previous':    self.page.previous_page_number() if self.page.has_previous() else None,
+            'results':     data,
+        })
 
+
+# ─── Logout ───────────────────────────────────────────────────────────────────
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request):
+        refresh_token = request.data.get('refresh_token')
+        if not refresh_token:
+            return Response(
+                {'error': 'refresh_token is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+        except TokenError:
+            return Response(
+                {'error': 'Token không hợp lệ hoặc đã hết hạn.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({'message': 'Đăng xuất thành công.'}, status=status.HTTP_200_OK)
+
+
+# ─── Book ViewSet ─────────────────────────────────────────────────────────────
 
 class BookViewSet(ModelViewSet):
     serializer_class = BookListSerializer
-    permission_classes = []
+    permission_classes = [IsAuthenticated]
+    pagination_class = BookPagination
 
     def get_queryset(self):
         queryset = Book.objects.all()
@@ -80,17 +100,10 @@ class BookViewSet(ModelViewSet):
 
     def list(self, request: Request, *args, **kwargs):
         queryset = self.get_queryset()
-        paged = paginate(queryset, request)
-        serializer = self.serializer_class(paged['results'], many=True)
-        return Response({
-            'count': paged['count'],
-            'total_pages': paged['total_pages'],
-            'page': paged['page'],
-            'page_size': paged['page_size'],
-            'next': paged['next'],
-            'previous': paged['previous'],
-            'results': serializer.data,
-        }, status=status.HTTP_200_OK)
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = self.serializer_class(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
     def create(self, request: Request, *args, **kwargs):
         serializer = self.serializer_class(data=request.data)
@@ -104,7 +117,10 @@ class BookViewSet(ModelViewSet):
         try:
             book = Book.objects.get(pk=pk)
         except Book.DoesNotExist:
-            return Response({"error": f"Không tìm thấy sách có id={pk}."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {'error': f'Không tìm thấy sách có id={pk}.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         serializer = self.serializer_class(book)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -113,7 +129,10 @@ class BookViewSet(ModelViewSet):
         try:
             book = Book.objects.get(pk=pk)
         except Book.DoesNotExist:
-            return Response({"error": f"Không tìm thấy sách có id={pk}."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {'error': f'Không tìm thấy sách có id={pk}.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         serializer = self.serializer_class(book, data=request.data, partial=False)
         if serializer.is_valid():
             serializer.save()
@@ -125,7 +144,10 @@ class BookViewSet(ModelViewSet):
         try:
             book = Book.objects.get(pk=pk)
         except Book.DoesNotExist:
-            return Response({"error": f"Không tìm thấy sách có id={pk}."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {'error': f'Không tìm thấy sách có id={pk}.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         serializer = self.serializer_class(book, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -137,6 +159,12 @@ class BookViewSet(ModelViewSet):
         try:
             book = Book.objects.get(pk=pk)
         except Book.DoesNotExist:
-            return Response({"error": f"Không tìm thấy sách có id={pk}."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {'error': f'Không tìm thấy sách có id={pk}.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         book.delete()
-        return Response({"message": f"Đã xóa sách có id={pk}."}, status=status.HTTP_204_NO_CONTENT)
+        return Response(
+            {'message': f'Đã xóa sách có id={pk}.'},
+            status=status.HTTP_204_NO_CONTENT,
+        )

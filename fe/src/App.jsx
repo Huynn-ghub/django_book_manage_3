@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { getBooks } from './api/bookApi';
 import BookTable from './components/BookTable';
 import Pagination from './components/Pagination';
 import FilterBar from './components/FilterBar';
 import BookModal from './components/BookModal';
+import LoginPage from './pages/LoginPage';
 import './App.css';
 
-const EMPTY_FORM = { title: '', author: '', published_date: '', price: '', quantity: '' };
+// ─── Main App (requires auth) ─────────────────────────────────────────────────
 
-export default function App() {
+function BookApp() {
+  const { logout } = useAuth();
+
   const [books, setBooks]           = useState([]);
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState(null);
@@ -19,14 +23,12 @@ export default function App() {
   const [totalPages, setTotalPages] = useState(1);
   const [count, setCount]           = useState(0);
 
-  // Filters (applied)
+  // Filters
   const [appliedFilters, setAppliedFilters] = useState({ title: '', author: '' });
-  // Filters (draft while typing)
   const [draftFilters, setDraftFilters]     = useState({ title: '', author: '' });
 
-  // Modal state
+  // Modal
   const [modal, setModal] = useState(null);
-  // { type: 'add'|'edit'|'detail'|'confirm', book: {...} }
 
   const fetchBooks = useCallback(async () => {
     setLoading(true);
@@ -37,7 +39,7 @@ export default function App() {
       setTotalPages(data.total_pages);
       setCount(data.count);
     } catch (e) {
-      setError('Failed to load books. Please try again.');
+      setError('Không thể tải danh sách sách. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
@@ -45,34 +47,32 @@ export default function App() {
 
   useEffect(() => { fetchBooks(); }, [fetchBooks]);
 
-  const handleSearch = () => {
-    setPage(1);
-    setAppliedFilters({ ...draftFilters });
-  };
-
-  const handleClear = () => {
+  const handleSearch = () => { setPage(1); setAppliedFilters({ ...draftFilters }); };
+  const handleClear  = () => {
     setDraftFilters({ title: '', author: '' });
     setAppliedFilters({ title: '', author: '' });
     setPage(1);
   };
+  const handlePageSizeChange = size => { setPageSize(size); setPage(1); };
 
-  const handlePageSizeChange = (size) => {
-    setPageSize(size);
-    setPage(1);
+  const openAdd    = ()     => setModal({ type: 'add', book: null });
+  const openEdit   = book   => setModal({ type: 'edit', book });
+  const openDetail = id     => setModal({ type: 'detail', book: { id } });
+  const openDelete = book   => setModal({ type: 'confirm', book });
+  const closeModal = ()     => setModal(null);
+  const handleSaved = ()    => { closeModal(); fetchBooks(); };
+
+  const handleLogout = async () => {
+    await logout();
   };
-
-  const openAdd    = ()      => setModal({ type: 'add', book: null });
-  const openEdit   = (book)  => setModal({ type: 'edit', book });
-  const openDetail = (id)    => setModal({ type: 'detail', book: { id } });
-  const openDelete = (book)  => setModal({ type: 'confirm', book });
-  const closeModal = ()      => setModal(null);
-
-  const handleSaved = () => { closeModal(); fetchBooks(); };
 
   return (
     <div className="app">
       <header className="app-header">
         <h1>📚 Book Management</h1>
+        <button className="btn btn-logout" onClick={handleLogout}>
+          Đăng xuất
+        </button>
       </header>
 
       <main className="app-main">
@@ -83,12 +83,12 @@ export default function App() {
             onSearch={handleSearch}
             onClear={handleClear}
           />
-          <button className="btn btn-primary" onClick={openAdd}>+ Add Book</button>
+          <button className="btn btn-primary" onClick={openAdd}>+ Thêm sách</button>
         </div>
 
         {error && <p className="error-msg">{error}</p>}
         {loading ? (
-          <p className="loading-msg">Loading...</p>
+          <p className="loading-msg">Đang tải...</p>
         ) : (
           <BookTable
             books={books}
@@ -117,5 +117,20 @@ export default function App() {
         />
       )}
     </div>
+  );
+}
+
+// ─── Root: auth gate ──────────────────────────────────────────────────────────
+
+function AppGate() {
+  const { isAuthenticated } = useAuth();
+  return isAuthenticated ? <BookApp /> : <LoginPage />;
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppGate />
+    </AuthProvider>
   );
 }

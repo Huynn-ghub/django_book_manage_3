@@ -1,0 +1,82 @@
+name: Django CI
+
+on:
+  push:
+    branches: [ "main", "dev" ]
+  pull_request:
+    branches: [ "main", "dev" ]
+
+jobs:
+  # ─── Backend Tests ────────────────────────────────────────────────
+  backend-test:
+    name: Backend – Django Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB:       test_db
+          POSTGRES_USER:     test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+      SECRET_KEY:   ${{ secrets.SECRET_KEY }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: be/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r be/requirements.txt
+
+      - name: Run migrations
+        run: python be/manage.py migrate
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+          SECRET_KEY:   ${{ secrets.SECRET_KEY }}
+
+      - name: Run tests
+        run: python be/manage.py test books --verbosity=2
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+          SECRET_KEY:   ${{ secrets.SECRET_KEY }}
+
+  # ─── Frontend Lint ────────────────────────────────────────────────
+  frontend-lint:
+    name: Frontend – ESLint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: fe/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: fe
+
+      - name: Run ESLint
+        run: npm run lint
+        working-directory: fe
