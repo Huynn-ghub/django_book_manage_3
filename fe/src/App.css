@@ -16,8 +16,53 @@ body {
   color: #fff;
   padding: 14px 24px;
   border-bottom: 2px solid #333;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 .app-header h1 { font-size: 20px; font-weight: 700; }
+
+/* ─── Logout Button ────────────────────────────────────────────── */
+.btn-logout {
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.4);
+  padding: 6px 14px;
+  border-radius: 3px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn-logout:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
+
+/* ─── Login Page ───────────────────────────────────────────────── */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f9f9f9;
+}
+
+.login-card {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 40px 36px;
+  width: 360px;
+  max-width: 95vw;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  text-align: center;
+}
+
+.login-logo   { font-size: 40px; margin-bottom: 12px; }
+.login-title  { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+.login-subtitle { font-size: 13px; color: #666; margin-bottom: 28px; }
+
+.login-form   { display: flex; flex-direction: column; gap: 16px; text-align: left; }
+.login-error  { color: #b00; font-size: 13px; text-align: center; }
+.login-btn    { width: 100%; padding: 10px; font-size: 14px; margin-top: 4px; }
+
 
 .app-main { padding: 20px 24px; flex: 1; }
 
