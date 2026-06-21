@@ -1,14 +1,20 @@
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
+from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated, AllowAny
+
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 
 from books.models import Book
 from books.serializers import BookListSerializer
+
+
+# ─── Helper: Phân trang ───────────────────────────────────────────────────────
 
 def paginate(queryset, request):
     page_size = request.query_params.get('page_size', 20)
@@ -38,9 +44,48 @@ def paginate(queryset, request):
     }
 
 
+# ─── Logout View ──────────────────────────────────────────────────────────────
+
+class LogoutView(APIView):
+    """
+    POST /api/logout/
+    Body: { "refresh_token": "<refresh_token>" }
+    Blacklist refresh token để vô hiệu hóa phiên đăng nhập.
+    Yêu cầu Bearer token trong header.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request):
+        refresh_token = request.data.get('refresh_token')
+        if not refresh_token:
+            return Response(
+                {"error": "refresh_token is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+        except TokenError as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        return Response({"message": "Đăng xuất thành công."}, status=status.HTTP_200_OK)
+
+
+# ─── Book ViewSet ─────────────────────────────────────────────────────────────
+
 class BookViewSet(ModelViewSet):
     serializer_class = BookListSerializer
-    permission_classes = []
+
+    def get_permissions(self):
+        """
+        - list, retrieve: AllowAny (không cần đăng nhập)
+        - create, update, partial_update, destroy: IsAuthenticated (cần JWT)
+        """
+        if self.action in ('list', 'retrieve'):
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         queryset = Book.objects.all()
